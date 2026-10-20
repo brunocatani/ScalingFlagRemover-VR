@@ -21,10 +21,6 @@
       "configuration": "Release",
       "targets": [
         "GLXRM_ScalingFlagRemover"
-      ],
-      "nativeToolOptions": [
-        "/m:1",
-        "/p:CL_MPCount=2"
       ]
     }
   ]
