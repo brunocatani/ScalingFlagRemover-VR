@@ -28,24 +28,6 @@ namespace
 		logger::info("Removed PC Level Mult from {} NPC records ({})", changedNPCs, a_when);
 	}
 
-	// Diagnostic for the reload revert: which records carry the flag again once the save is read.
-	void CountScalingFlags()
-	{
-		auto dataHandler = RE::TESDataHandler::GetSingleton();
-		if (!dataHandler) {
-			return;
-		}
-		std::uint32_t flagged{ 0 };
-		std::string sample;
-		for (auto currentNPC : dataHandler->GetFormArray<RE::TESNPC>()) {
-			if (currentNPC && currentNPC->HasPCLevelMult()) {
-				if (++flagged <= 12) {
-					sample += fmt::format(" {:08X}", currentNPC->formID);
-				}
-			}
-		}
-		logger::info("After the save load {} NPC records have PC Level Mult:{}", flagged, sample);
-	}
 }
 
 void ListenerThing(F4SE::MessagingInterface::Message* a_thing)
@@ -57,13 +39,11 @@ void ListenerThing(F4SE::MessagingInterface::Message* a_thing)
 		}
 		break;
 	case F4SE::MessagingInterface::kPreLoadGame:
-		// A save loaded after the game returned to the main menu (a death reload, or quitting to the
-		// menu) finds NPC records reverted to their plugin data, measured on the bench: Piper scaled
-		// with the player again. Game data is ready only once per process, so this runs before each load.
+		// Returning to the main menu (a death reload, or quitting to the menu) reverts NPC records to
+		// their plugin data before the next save is read: measured on the bench, all 243 records had the
+		// flag again here. Game data is ready only once per process, so the removal runs before each
+		// load. The save's own changes to a record are read afterwards and still win, as on a first load.
 		RemoveScalingFlags("before save load");
-		break;
-	case F4SE::MessagingInterface::kPostLoadGame:
-		CountScalingFlags();
 		break;
 	default:
 		break;
