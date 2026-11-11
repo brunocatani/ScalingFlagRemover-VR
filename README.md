@@ -52,7 +52,7 @@ cmake --preset fast
 cmake --build --preset fast
 ```
 
-The preset builds Release with compiler concurrency capped at two processes. The DLL is written to `build-fast/Release/GLXRM_ScalingFlagRemover.dll`. Put machine-specific settings and optional deployment paths in an ignored `CMakeUserPresets.json`.
+The preset builds Release. The DLL is written to `build-fast/Release/GLXRM_ScalingFlagRemover.dll`. Put machine-specific settings and optional deployment paths in an ignored `CMakeUserPresets.json`.
 
 ## Credits and permission
 
