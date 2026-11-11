@@ -4,26 +4,69 @@
 #include <sstream>
 #include <string>
 
-void ListenerThing(F4SE::MessagingInterface::Message* a_thing)
+namespace
 {
-	if (a_thing->type == F4SE::MessagingInterface::kGameDataReady) {
-		if (auto dataHandler = RE::TESDataHandler::GetSingleton(); dataHandler) {
-			std::uint32_t changedNPCs{ 0 };
-			for (auto currentNPC : dataHandler->GetFormArray<RE::TESNPC>()) {
-				if (currentNPC->HasPCLevelMult()) {
-					currentNPC->actorData.actorBaseFlags.reset(RE::ACTOR_BASE_DATA::Flag::kPCLevelMult);
-					if (currentNPC->actorData.calcLevelMin < currentNPC->actorData.calcLevelMax) {
-						currentNPC->actorData.level = currentNPC->actorData.calcLevelMax;
-					} else {
-						currentNPC->actorData.level = currentNPC->actorData.calcLevelMin;
-					}
-					++changedNPCs;
+	void RemoveScalingFlags(std::string_view a_when)
+	{
+		auto dataHandler = RE::TESDataHandler::GetSingleton();
+		if (!dataHandler) {
+			logger::warn("Unable to access DataHandler! Nothing will be changed...");
+			return;
+		}
+		std::uint32_t changedNPCs{ 0 };
+		for (auto currentNPC : dataHandler->GetFormArray<RE::TESNPC>()) {
+			if (currentNPC && currentNPC->HasPCLevelMult()) {
+				currentNPC->actorData.actorBaseFlags.reset(RE::ACTOR_BASE_DATA::Flag::kPCLevelMult);
+				if (currentNPC->actorData.calcLevelMin < currentNPC->actorData.calcLevelMax) {
+					currentNPC->actorData.level = currentNPC->actorData.calcLevelMax;
+				} else {
+					currentNPC->actorData.level = currentNPC->actorData.calcLevelMin;
+				}
+				++changedNPCs;
+			}
+		}
+		logger::info("Removed PC Level Mult from {} NPC records ({})", changedNPCs, a_when);
+	}
+
+	// Diagnostic for the reload revert: which records carry the flag again once the save is read.
+	void CountScalingFlags()
+	{
+		auto dataHandler = RE::TESDataHandler::GetSingleton();
+		if (!dataHandler) {
+			return;
+		}
+		std::uint32_t flagged{ 0 };
+		std::string sample;
+		for (auto currentNPC : dataHandler->GetFormArray<RE::TESNPC>()) {
+			if (currentNPC && currentNPC->HasPCLevelMult()) {
+				if (++flagged <= 12) {
+					sample += fmt::format(" {:08X}", currentNPC->formID);
 				}
 			}
-			logger::info("Removed PC Level Mult from {} NPC records", changedNPCs);
-		} else {
-			logger::warn("Unable to access DataHandler! Nothing will be changed...");
 		}
+		logger::info("After the save load {} NPC records have PC Level Mult:{}", flagged, sample);
+	}
+}
+
+void ListenerThing(F4SE::MessagingInterface::Message* a_thing)
+{
+	switch (a_thing->type) {
+	case F4SE::MessagingInterface::kGameDataReady:
+		if (a_thing->data) {
+			RemoveScalingFlags("game data ready");
+		}
+		break;
+	case F4SE::MessagingInterface::kPreLoadGame:
+		// A save loaded after the game returned to the main menu (a death reload, or quitting to the
+		// menu) finds NPC records reverted to their plugin data, measured on the bench: Piper scaled
+		// with the player again. Game data is ready only once per process, so this runs before each load.
+		RemoveScalingFlags("before save load");
+		break;
+	case F4SE::MessagingInterface::kPostLoadGame:
+		CountScalingFlags();
+		break;
+	default:
+		break;
 	}
 }
 
